@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Account
+from .models import Account, Transaction
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 
@@ -32,5 +32,12 @@ class AccountSerializer(serializers.ModelSerializer):
         return validated_data
 
 
+class TransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = "__all__"
 
-
+    def validate(self, validated_data):
+        if validated_data['amount'] < 0:
+            raise serializers.ValidationError('amount cannot be negative')
+        return validated_data
