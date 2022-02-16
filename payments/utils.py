@@ -55,3 +55,9 @@ class TransferUtils:
 
         return Response({'message': 'Transfer successfull'},
                         status=status.HTTP_200_OK)
+
+
+class LoanUtils:
+    @staticmethod
+    def get_total_return_amount(lend_amount, interest_rate):
+        return decimal.Decimal(round(lend_amount * decimal.Decimal(1 + interest_rate / 100), 2))

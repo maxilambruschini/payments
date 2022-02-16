@@ -1,11 +1,12 @@
 from rest_framework.test import APITestCase, APIRequestFactory, APIClient
 from rest_framework import status
 from django.contrib.auth import get_user_model
-from django.utils import timezone
+from django.utils import timezone, dateformat
 import datetime
 import decimal
 
 from .models import Account, Loan
+from .utils import LoanUtils
 
 
 def setup_superuser(username):
@@ -278,46 +279,120 @@ class TestLoan(APITestCase):
         self.create_uri = "/createfunds/"
         self.createloan_uri = "/createloan/"
         self.getloanstatus_uri = "/loanstatus/"
+        self.payloan_uri = "/payloan/"
+        self.transfer_uri = "/transferfunds/"
         self.superuser = setup_superuser('admin')
         self.user = setup_user('client')
         self.superuser_account = Account.objects.get(user=self.superuser)
         self.user_account = Account.objects.get(user=self.user)
 
     @staticmethod
-    def generate_loan_data():
-        day_difference = 5
-        loan_data = {
-            "id": 1,
+    def create_loan_data(receiver_pk):
+        return {
+            "receiver": receiver_pk,
             "lend_amount": 10,
             "interest_rate": 10,
-            "due_date": timezone.now() + datetime.timedelta(days=day_difference),
-            # TODO: chequear lectura y escritura de fechas
-            "loan_days": day_difference,
-            "loaner": 1,
-            "receiver": 2
+            "due_date": timezone.now() + timezone.timedelta(days=10)
         }
-        return loan_data
 
     def test_create_loan(self):
         self.client.login(username="admin", password="test")
         creation_data = {'amount': 50}
         self.client.put(self.create_uri, creation_data)
 
-        create_loan_data = self.generate_loan_data()
-        response = self.client.post(self.createloan_uri, create_loan_data)
+        loan_data = self.create_loan_data(receiver_pk=self.user_account.pk)
+        response = self.client.post(self.createloan_uri, loan_data)
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED,
-                         response.data)
+                         "Expected status code 200 but got {} instead".format(response.status_code))
 
     def test_loan_status(self):
         self.client.login(username="admin", password="test")
         creation_data = {'amount': 50}
         self.client.put(self.create_uri, creation_data)
 
-        create_loan_data = self.generate_loan_data()
+        create_loan_data = self.create_loan_data(receiver_pk=self.user_account.pk)
         self.client.post(self.createloan_uri, create_loan_data)
 
-        loan_pk = Loan.objects.all()[-1].pk
-        response = self.client.get(self.getloanstatus_uri + "{}/".format(loan_pk))
-        self.assertEqual(response.status_code, status.HTTP_200_OK,
-                         response.data)
+        loan_pk = Loan.objects.all()[0].pk
+        get_status_response = self.client.get(self.getloanstatus_uri + "{}/".format(loan_pk))
+        self.assertEqual(get_status_response.status_code, status.HTTP_200_OK,
+                         get_status_response)
+
+    def test_pay_loan(self):
+        self.client.login(username="admin", password="test")
+        creation_data = {'amount': 50}
+        self.client.put(self.create_uri, creation_data)
+
+        create_loan_data = self.create_loan_data(receiver_pk=self.user_account.pk)
+        self.client.post(self.createloan_uri, create_loan_data)
+
+        loan_pk = Loan.objects.all()[0].pk
+        pay_loan_data = {
+            'loan_id': loan_pk,
+            'payed_amount': create_loan_data['lend_amount']
+        }
+        self.client.login(username="client", password="test")
+        pay_loan_response = self.client.put(self.payloan_uri, pay_loan_data)
+
+        self.assertEqual(pay_loan_response.status_code, status.HTTP_200_OK,
+                         "Expected code 200 but got {} instead".format(pay_loan_response.status_code))
+
+    def test_loan_integral(self):
+        self.client.login(username='admin', password="test")
+
+        # create funds for admin
+        creation_data = {'amount': 100}
+        self.client.put(self.create_uri, creation_data)
+
+        # transfer funds to client to be able to return loan amount
+        transfer_data = {'amount': 20}
+        self.client.put(self.transfer_uri + "{}/".format(self.user_account.pk), transfer_data)
+
+        # create loan from admin to client
+        loan_data = self.create_loan_data(receiver_pk=self.user_account.pk)
+        createloan_response = self.client.post(self.createloan_uri, loan_data)
+        self.assertEqual(createloan_response.status_code, status.HTTP_201_CREATED,
+                         "Loan creation failed. Expected 201 but got {} instead".format(
+                             createloan_response.status_code))
+
+        # get loan status -> unpaid
+        loan_pk = Loan.objects.all()[0].pk
+        get_status_response = self.client.get(self.getloanstatus_uri + "{}/".format(loan_pk))
+        self.assertEqual(get_status_response.data['return_date'], None,
+                         "First loan status failed")
+
+        # pay $5
+        loan_pk = Loan.objects.all()[0].pk
+        pay_loan_data = {
+            'loan_id': loan_pk,
+            'payed_amount': 5
+        }
+        self.client.login(username="client", password="test")
+        pay_loan_response = self.client.put(self.payloan_uri, pay_loan_data)
+        self.assertEqual(pay_loan_response.status_code, status.HTTP_200_OK,
+                         "First loan payment failed. Expected code 200 but got {} instead".format(
+                             pay_loan_response.status_code))
+
+        # get loan status -> unpaid
+        loan_pk = Loan.objects.all()[0].pk
+        get_status_response = self.client.get(self.getloanstatus_uri + "{}/".format(loan_pk))
+        self.assertEqual(get_status_response.data['return_date'], None,
+                         "Second loan status failed")
+
+        # pay $6
+        loan_pk = Loan.objects.all()[0].pk
+        pay_loan_data = {
+            'loan_id': loan_pk,
+            'payed_amount': 6
+        }
+        self.client.login(username="client", password="test")
+        pay_loan_response = self.client.put(self.payloan_uri, pay_loan_data)
+        self.assertEqual(pay_loan_response.status_code, status.HTTP_200_OK,
+                         "Second loan payment failed. Expected code 200 but got {} instead".format(
+                             pay_loan_response.status_code))
+
+        # get loan status -> paid
+        loan_pk = Loan.objects.all()[0].pk
+        get_status_response = self.client.get(self.getloanstatus_uri + "{}/".format(loan_pk))
+        self.assertTrue(get_status_response.data['return_date'] is not None, "Third loan status failed")

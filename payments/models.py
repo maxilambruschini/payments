@@ -33,7 +33,6 @@ class Loan(models.Model):
     lend_amount = models.DecimalField(max_digits=10, decimal_places=2)
     interest_rate = models.IntegerField()
     due_date = models.DateTimeField()
-    loan_days = models.IntegerField()
     return_date = models.DateTimeField(default=None, blank=True, null=True)
     returned_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 

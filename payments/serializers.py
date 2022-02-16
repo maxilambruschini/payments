@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Account, Transaction, Loan
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
+from django.utils import timezone
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -43,17 +44,17 @@ class TransferLogSerializer(serializers.ModelSerializer):
         return validated_data
 
 
+
 class LoanSerializer(serializers.ModelSerializer):
     class Meta:
         model = Loan
         fields = "__all__"
 
     def validate(self, validated_data):
-        if validated_data['lend_amount'] < 0:
+        if 'lend_amount' in validated_data and validated_data['lend_amount'] < 0:
             raise serializers.ValidationError('lend amount cannot be negative')
 
-        if validated_data['loan_days'] < 0:
+        if 'due_date' in validated_data and validated_data['due_date'] < timezone.now():
             raise serializers.ValidationError('due date must be in the future')
 
         return validated_data
-
