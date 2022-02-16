@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Account, Transaction
+from .models import Account, Transaction, Loan
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 
@@ -32,7 +32,7 @@ class AccountSerializer(serializers.ModelSerializer):
         return validated_data
 
 
-class TransactionSerializer(serializers.ModelSerializer):
+class TransferLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
         fields = "__all__"
@@ -41,3 +41,19 @@ class TransactionSerializer(serializers.ModelSerializer):
         if validated_data['amount'] < 0:
             raise serializers.ValidationError('amount cannot be negative')
         return validated_data
+
+
+class LoanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Loan
+        fields = "__all__"
+
+    def validate(self, validated_data):
+        if validated_data['lend_amount'] < 0:
+            raise serializers.ValidationError('lend amount cannot be negative')
+
+        if validated_data['loan_days'] < 0:
+            raise serializers.ValidationError('due date must be in the future')
+
+        return validated_data
+

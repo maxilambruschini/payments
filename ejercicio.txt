@@ -1,0 +1,60 @@
+Descripción de alto nivel:
+
+El ejercicio consiste en desarrollar una API para una aplicación de pagos digitales.
+En esta aplicación, existen usuarios "Administradores" y usuarios "Clientes".
+Todos los usuarios pueden poseer plata, y pueden "Transferirse" plata entre sí.
+Los usuarios "Administradores", pueden "Crear" plata desde cero, y pueden "Quemarle" plata a cualquier usuario no administrador.
+
+Para que la aplicación se pueda empezar a usar, tiene que haber un usuario "Administrador" que cree los primero fondos y los ponga en circulación entre los usuarios. Si un administrador quiere penalizar a un usuario, o se quieren quitar los fondos de circulación, el administrador puede "Quemar" los fondos de los usuarios que quiera.
+
+También, en un futuro se deberá poder calcular determinadas métricas sobre los fondos actuales en circulación, y los usuarios.
+
+Entonces, un caso de uso de la API podría ser así:
+
+1. Se registra el Administrador A, y los usuarios Clientes B y C. Inicialmente todos tienen 0 unidades monetarias.
+2. A "Crea" 50 unidades monetarias, que inicialmente las tendrá él.
+3. A "Transfiere" 25 unidades a B, y "Transfiere" 25 unidades a C. Ahora A tiene 0 unidades.
+4. B transfiere 10 unidades a C, y ahora B tiene 15 unidades, y C tiene 35. A tiene 0.
+5. A decide "Quemarle" 10 unidades monetarias a B. Entonces ahora B tiene 5 unidades, C tiene 35, y A tiene 0.
+
+Descripción técnica:
+
+Teniendo en cuenta la descripción anterior, hacer lo siguiente:
+
+1. Crear la cantidad mínima de modelos que se crean necesarios para el caso de uso anterior.
+   Se podría tener un modelo User, con un campo "Amount" que represente la cantidad de fondos que tiene.
+   Si es necesario otro modelo, crearlo.
+
+2. Implementar los siguientes endpoints:
+	2.a) "create_funds": Sólo puede ser llamado por el usuario administrador, y debe tirar un error en caso contrario. Este endpoint recibe como input la cantidad de unidades monetarias a crear, y le asigna estas unidades al usuario que llamó al endpoint.
+
+    2.b) "burn_funds": Sólo puede ser llamado por el usuario administrador, y debe tirar un error en caso contrario. Este endpoint recibe como input la cantidad de unidades monetarias a quemar X, y el id I de un usuario. Luego de ejecutarse, se reducen X unidades monetarias al usuario I.
+
+    2.c) "transfer_funds": Puede ser llamado por cualquier usuario. Recibe como input una cantidad X, y un id de usuario I. Al ser llamado, se reduce una cantidad X de unidades monetarias del usuario que llama al endpoint, y se agregan X unidades monetarias al usuario I.
+
+   Para todos los endpoints, tener en cuenta las validaciones que deben hacerse que no hayan sido mencionadas. Por ejemplo,
+   un usuario no debería poder transferir más plata de la que tiene.
+
+3. Implementar unit tests para cada uno de los endpoints. También, implementar un test integral que recree el ejemplo explicado en el caso de uso en la descripción de alto nivel.
+
+Sugerencia:
+
+Una práctica recomendada es hacer TDD (test driven development). Es decir, por ejemplo, si voy a empezar a programar el 
+endpoint "transfer_funds", antes de arrancarlo primero creo un unit test que describa qué quiero que haga ese endpoint.
+Luego, en función de lo que quiero que haga, empiezo a programarlo. Esto me permite ir ejecutando el test y debugeando el endpoint a medida que lo implemento, anticipandome a posibles errores que puedan surgir. Si implemento todo el endpoint desde cero, y después hago el test, probablemente aparezcan errores que no contemplé durante la implementación, y tendré que arreglarlos todos de una. Si voy ejecutando el test a medida que implemento el endpoint, voy a ir detectando estos errores uno por uno y arreglandolos uno por uno.
+
+Por ejemplo, si implemento el endpoint de "transfer_funds", lo que yo haría sería:
+1. Crear un unit test llamado "validate_source_funds_reduction", que valide que el usuario que llama el endpoint se le reduzcan los fondos.
+2. Empiezo a programar el endpoint, empezando por la parte donde se le reducen los fondos al usuario que llama al endpoint.
+3. Ejecuto el test y verifico que funcione.
+4. Creo otro test llamado "validate_destination_funds_addition", que valida que el usuario al que se le transfiere plata
+se le incrementen los fondos.
+5. Sigo programando el endpoint, y le agrego el código que le incremente los fondos al usuario que recibe el dinero.
+6. Ejecuto el test y verifico que funcione.
+7. Sigo así sucesivamente, creando tests atómicos que verifiquen cosas muy puntuales del endpoint, y al final los vuelvo a 
+ejecutar todos, chequeando que todos los casos de uso del endpoint estén contemplados.
+
+Próximos pasos:
+
+Una vez completado este ejercicio, se dará un nuevo ejercicio donde hayan endpoints para calcular ciertas métricas
+sobre la actividad de los usuarios.

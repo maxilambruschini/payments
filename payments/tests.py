@@ -1,8 +1,11 @@
 from rest_framework.test import APITestCase, APIRequestFactory, APIClient
+from rest_framework import status
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+import datetime
 import decimal
 
-from .models import Account
+from .models import Account, Loan
 
 
 def setup_superuser(username):
@@ -149,14 +152,14 @@ class TestTransferFunds(APITestCase):
                          "Source acount funds do not match")
 
 
-class TestTransaction(APITestCase):
+class TestTransferLogs(APITestCase):
     def setUp(self):
         self.client = APIClient()
         self.factory = APIRequestFactory()
         self.create_uri = "/createfunds/"
         self.transfer_uri = "/transferfunds/"
         self.burn_uri = "/burnfunds/"
-        self.transaction_uri = "/transactions/"
+        self.transaction_uri = "/transferlogs/"
         self.superuser = setup_superuser('admin')
         self.user = setup_user('prueba')
         self.superuser_account = Account.objects.get(user=self.superuser)
@@ -174,11 +177,12 @@ class TestTransaction(APITestCase):
         source_account_pk = response.data[-1]['source_account']
         destination_account_pk = response.data[-1]['destination_account']
         self.assertEqual(transaction_amount, 50,
-                         'Transaction amount does not match. Expected 50 but got {} instead'.format(transaction_amount))
+                         'Transfer log amount does not match. Expected 50 but got {} instead'.format(
+                             transaction_amount))
         self.assertEqual(source_account_pk, None,
-                         "Transaction source_account should be none")
+                         "Transfer log source_account should be none")
         self.assertEqual(destination_account_pk, self.superuser_account.pk,
-                         "Transaction destination_account does not match")
+                         "Transfer log destination_account does not match")
 
     def test_fund_destruction_transaction(self):
         self.client.login(username="admin", password="test")
@@ -194,11 +198,12 @@ class TestTransaction(APITestCase):
         source_account_pk = response.data[-1]['source_account']
         destination_account_pk = response.data[-1]['destination_account']
         self.assertEqual(transaction_amount, 20,
-                         'Transaction amount does not match. Expected 20 but got {} instead'.format(transaction_amount))
+                         'Transfer log amount does not match. Expected 20 but got {} instead'.format(
+                             transaction_amount))
         self.assertEqual(source_account_pk, self.superuser_account.pk,
-                         "Transaction source_account does not match")
+                         "Transfer log source_account does not match")
         self.assertEqual(destination_account_pk, None,
-                         "Transaction destination_account should be None")
+                         "Transfer log destination_account should be None")
 
     def test_transaction(self):
         self.client.login(username="admin", password="test")
@@ -214,11 +219,12 @@ class TestTransaction(APITestCase):
         source_account_pk = response.data[-1]['source_account']
         destination_account_pk = response.data[-1]['destination_account']
         self.assertEqual(transaction_amount, 30,
-                         'Transaction amount does not match. Expected 20 but got {} instead'.format(transaction_amount))
+                         'Transfer log amount does not match. Expected 20 but got {} instead'.format(
+                             transaction_amount))
         self.assertEqual(source_account_pk, self.superuser_account.pk,
-                         "Transaction source_account does not match")
+                         "Transfer log source_account does not match")
         self.assertEqual(destination_account_pk, self.user_account.pk,
-                         "Transaction destination_account should be None")
+                         "Transfer log destination_account should be None")
 
 
 class TestIntegralTransfer(APITestCase):
@@ -263,3 +269,55 @@ class TestIntegralTransfer(APITestCase):
         updated_C_funds = Account.objects.get(user=self.user_c).amount
         self.assertEqual(updated_C_funds, 35,
                          "C funds do not match. Expected 35 but got {} instead".format(updated_C_funds))
+
+
+class TestLoan(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.factory = APIRequestFactory()
+        self.create_uri = "/createfunds/"
+        self.createloan_uri = "/createloan/"
+        self.getloanstatus_uri = "/loanstatus/"
+        self.superuser = setup_superuser('admin')
+        self.user = setup_user('client')
+        self.superuser_account = Account.objects.get(user=self.superuser)
+        self.user_account = Account.objects.get(user=self.user)
+
+    @staticmethod
+    def generate_loan_data():
+        day_difference = 5
+        loan_data = {
+            "id": 1,
+            "lend_amount": 10,
+            "interest_rate": 10,
+            "due_date": timezone.now() + datetime.timedelta(days=day_difference),
+            # TODO: chequear lectura y escritura de fechas
+            "loan_days": day_difference,
+            "loaner": 1,
+            "receiver": 2
+        }
+        return loan_data
+
+    def test_create_loan(self):
+        self.client.login(username="admin", password="test")
+        creation_data = {'amount': 50}
+        self.client.put(self.create_uri, creation_data)
+
+        create_loan_data = self.generate_loan_data()
+        response = self.client.post(self.createloan_uri, create_loan_data)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED,
+                         response.data)
+
+    def test_loan_status(self):
+        self.client.login(username="admin", password="test")
+        creation_data = {'amount': 50}
+        self.client.put(self.create_uri, creation_data)
+
+        create_loan_data = self.generate_loan_data()
+        self.client.post(self.createloan_uri, create_loan_data)
+
+        loan_pk = Loan.objects.all()[-1].pk
+        response = self.client.get(self.getloanstatus_uri + "{}/".format(loan_pk))
+        self.assertEqual(response.status_code, status.HTTP_200_OK,
+                         response.data)

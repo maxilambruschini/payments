@@ -1,0 +1,75 @@
+Continuación del ejercicio de la API de pagos digitales.
+
+Descripción de alto nivel:
+
+Se va a incorporar la posibilidad de realizar préstamos dentro de la plataforma.
+Un préstamo consiste en:
+	* usuario que presta plata
+	* usuario que recibe el préstamo
+	* cantidad a prestar
+	* interest rate
+	* fecha a devolver la plata
+	* fecha en la que se devolvió la plata (en caso de que se haya devuelto, si todavía no se devolvió, este campo es vacío)
+	* cantidad de plata devuelta (en caso de que se haya devuelto, si todavía no se devolvió, este campo es vacío)
+
+Se le quiere dar a los usuarios la posibilidad de prestar plata a otros usuarios, y de monitorear el estado actual
+de un préstamo, si ya se devolvió, si todavía no se devolvió, etc.
+
+Ejemplo de caso de uso:
+
+Imaginemos dos usuarios A y B, donde A tiene 10$ y B tiene 0$.
+
+1. A crea un préstamo para B con los siguientes campos:
+	-> usuario que presta plata: A
+	-> usuario que recibe el préstamo: B
+	-> cantidad a prestar: 10$
+	-> interest rate: 10% (es decir, que la cantidad que B le tiene que devolver es 10$ + 10% * 10 = 11$)
+	-> fecha a devolver la plata: dentro de 3 dias
+	-> fecha en la que se devolvió la plata: None (porque todavía no se ha devuelto)
+	-> cantidad de plata devuelta (None, porque todavía no se ha devuelto)
+
+2. Después de un día, A consulta a la API si B le devolvió el préstamo, la API le responde que no.
+
+3. Después de dos días, B salda parte de su deuda del préstamo con 5$. Ahora, en la base de datos, se modificarían el
+   siguiente campo en el préstamo:
+	-> cantidad de plata devuelta: 5$
+
+4. A consulta a la API si B le devolvió el préstamo, la API le responde que no.
+
+5. Luego, B le devuelve 6$ más a A, y se actualiza el siguiente campo en la base de datos en la tabla del préstamo:
+	-> cantidad de plata devuelta: 11$
+
+6. A consulta a la API si B le devolvió el préstamo, la API le responde que si.
+
+Descripción técnica:
+
+Teniendo en cuenta la descripción de alto nivel, crear el modelo Loan, que representa un préstamo,
+y utilizar los campos que se crean convenientes en función de la descripción del caso de uso.
+
+Se deberán implementar los siguientes endpoints:
+
+* create_loan: Crea un préstamo en la base de datos. Lo puede llamar cualquier usuario. El input es:
+	-> reciever: id del usuario que recibe plata
+	-> lend_amount: cantidad de plata a prestar
+	-> interest_rate: el interés del préstamo
+	-> due_date: fecha a devolver el préstamo
+
+* pay_loan: Lo puede llamar cualquier usuario. Se usa para pagar parte de un préstamo, o un préstamo completo.
+			El input es:
+			-> id del préstamo
+			-> cantidad a devolver
+			Al ejecutarse este endpoint, debería suceder lo siguiente:
+			-> Se actualiza la cantidad de plata que fue devuelta en el préstamo en la base de datos
+			-> Tener en cuenta el ejercicio 2, donde se guardan en la base de datos todas las transacciones.
+			   Cuando B paga el préstamo, se deberían reducir sus fondos, y se debería guardar la transacción
+			   en la base de datos, como se describe en el ejercicio 2.
+
+* get_loan_status: Este endpoint sirve para consultar el estado de un préstamo en particular.
+				   Recibe como input el id de un préstamo, y devuelve un json con la información de todos los
+				   campos del objeto Loan. En la descripción del caso de uso más arriba, en los puntos 2, 4 y 6,
+				   se dice que cuando A le consulta a la API si B devuelve el préstamo, la API le responde SI o NO.
+				   Es una simplificación para facilitar el ejemplo, pero en realidad, lo que queremos es que 
+				   la API le devuelva un json con toda la información del préstamo, y es este endpoint el que se encarga de eso.
+
+Recordar acompañar la implementación de cada endpoint con sus respectivos unit tests.
+Y realizar también un unit test integral que contemple el caso de uso presentado.

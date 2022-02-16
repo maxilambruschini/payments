@@ -3,10 +3,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from django.contrib.auth import authenticate
+from django.utils import timezone
+from django.http import HttpRequest
+from django.shortcuts import get_object_or_404
+import datetime
 import decimal
 
-from .models import Account, Transaction
-from .serializers import UserSerializer, AccountSerializer, TransactionSerializer
+from .models import Account, Transaction, Loan
+from .serializers import UserSerializer, AccountSerializer, TransferLogSerializer, LoanSerializer
+from .utils import TransferUtils, TransferLogUtils
 
 
 class UserCreate(generics.CreateAPIView):
@@ -38,20 +43,15 @@ class AccountViewSet(viewsets.ModelViewSet):
     serializer_class = AccountSerializer
 
 
-class TransactionView(generics.ListCreateAPIView):
+class TransferLogView(generics.ListCreateAPIView):
+    serializer_class = TransferLogSerializer
+
     def get_queryset(self):
-        #print(Transaction.objects.all()[0])
         return Transaction.objects.all()
 
-    def post(self, transaction_data):
-        serializer = TransactionSerializer(data=transaction_data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    serializer_class = TransactionSerializer
+    def post(self, transfer_log_data):
+        response = TransferLogUtils.exec_transaction(transfer_log_data=transfer_log_data)
+        return response
 
 
 class FundCreation(generics.UpdateAPIView):
@@ -70,7 +70,7 @@ class FundCreation(generics.UpdateAPIView):
 
         if serializer.is_valid():
             serializer.save()
-            TransactionView.post(None, transaction_data)
+            TransferLogView.post(None, transaction_data)
             return Response(serializer.data)
         else:
             return Response({"message": "failed", "details": serializer.errors},
@@ -93,7 +93,7 @@ class FundDestruction(generics.UpdateAPIView):
 
         if serializer.is_valid():
             serializer.save()
-            TransactionView.post(None, transaction_data)
+            TransferLogView.post(None, transaction_data)
             return Response(serializer.data)
         else:
             return Response({"message": "failed", "details": serializer.errors},
@@ -105,33 +105,59 @@ class TransferFunds(generics.UpdateAPIView):
 
     def update(self, request, destination_account_pk):
         user = request.user
+        source_account_pk = Account.objects.get(user=user).pk
 
-        source_account = Account.objects.get(user=user)
-        source_amount = source_account.amount - decimal.Decimal(request.data['amount'])
-        source_data = {'amount': source_amount}
-        source_serializer = self.get_serializer(source_account, data=source_data, partial=True)
+        response = TransferUtils.exec_transfer(
+            source_account_pk=source_account_pk,
+            destination_account_pk=destination_account_pk,
+            transfer_data=request.data
+        )
+        return response
 
-        if not source_serializer.is_valid():
-            return Response({'message': 'failed', 'details': source_serializer.errors},
+
+class CreateLoan(generics.ListCreateAPIView):
+    queryset = Loan.objects.all()
+    serializer_class = LoanSerializer
+
+    def post(self, request):
+        loaner_account_pk = Account.objects.get(user=request.user).pk
+
+        due_date = datetime.datetime.strptime(request.data['due_date'], '%Y-%m-%dT%H:%M:%S.%fZ')
+        loan_days = due_date.day - timezone.now().day
+
+        loan_data = {**request.data, 'loaner': loaner_account_pk, 'loan_days': loan_days}
+        loan_serializer = LoanSerializer(data=loan_data, partial=True)
+
+        if not loan_serializer.is_valid():
+            return Response({'message': 'failed', 'details': loan_serializer.errors},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        destination_account = Account.objects.get(pk=destination_account_pk)
-        destination_amount = destination_account.amount + decimal.Decimal(request.data['amount'])
-        destination_data = {'amount': destination_amount}
-        destination_serializer = self.get_serializer(destination_account, data=destination_data, partial=True)
+        # Transfer generation
+        transfer_data = {'amount': request.data['lend_amount']}
+        transfer_response = TransferUtils.exec_transfer(
+            source_account_pk=loaner_account_pk,
+            destination_account_pk=request.data['receiver'],
+            transfer_data=transfer_data
+        )
 
-        transaction_data = {
-            'destination_account': destination_account_pk,
-            'source_account': source_account.pk,
-            'amount': request.data['amount']
-        }
-
-        if not destination_serializer.is_valid():
-            return Response({'message': 'failed', 'details': destination_serializer.errors},
+        if transfer_response.status_code != status.HTTP_200_OK:
+            return Response({'message': 'failed', 'details': 'loan transfer failed'},
                             status=status.HTTP_400_BAD_REQUEST)
-        else:
-            source_serializer.save()
-            destination_serializer.save()
-            TransactionView.post(None, transaction_data)
-            return Response({'message': 'Transfer successfull'},
-                            status=status.HTTP_200_OK)
+
+        loan_serializer.save()
+        return Response(loan_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class PayLoan(generics.UpdateAPIView):
+    model = LoanSerializer
+
+    #def update(self, request, *args, **kwargs):
+
+
+class GetLoanStatus(generics.RetrieveAPIView):
+    model = LoanSerializer
+
+    def retrieve(self, request, loan_pk):
+        loan = get_object_or_404(Loan, pk=loan_pk)
+        loan_serializer = LoanSerializer(loan)
+        return Response(loan_serializer.data, status=status.HTTP_200_OK)

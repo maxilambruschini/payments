@@ -1,0 +1,39 @@
+Este ejercicio es una continuación del ejercicio de la API de pagos digitales.
+
+Descripción de alto nivel:
+
+Con el objetivo de poder auditar y monitorear la actividad en la API, se decide guardar en la base de datos
+todas las transacciones realizadas. Esto aplica cuando se crean fondos, cuando se queman fondos, y cuando
+se transfieren fondos. La información que se debe guardar es:
+	* Usuario origen desde donde salen los fondos (vacío en caso de que se estén "creando" fondos. Si se están quemando fondos a un usuario, en este campo iría ese usuario)
+	* Usuario destino hacia donde van los fondos (vacío en caso de que se estén "quemando" fondos)
+	* Cantidad de fondos en la transacción
+
+Como ejemplo, recordemos el ejemplo propuesto en el ejercicio anterior:
+
+1. Se registra el Administrador A, y los usuarios Clientes B y C. Inicialmente todos tienen 0 unidades monetarias.
+2. A "Crea" 50 unidades monetarias, que inicialmente las tendrá él.
+3. A "Transfiere" 25 unidades a B, y "Transfiere" 25 unidades a C. Ahora A tiene 0 unidades.
+4. B transfiere 10 unidades a C, y ahora B tiene 15 unidades, y C tiene 35. A tiene 0.
+5. A decide "Quemarle" 10 unidades monetarias a B. Entonces ahora B tiene 5 unidades, C tiene 35, y A tiene 0.
+
+Al haber completado los 5 pasos, deberíamos tener las siguientes transacciones guardadas en la base de datos:
+
+* TX.origin_user = None; TX.destination_user = A; TX.amount = 50
+* TX.origin_user = A; TX.destination_user = B; TX.amount = 25
+* TX.origin_user = A; TX.destination_user = C; TX.amount = 25
+* TX.origin_user = B; TX.destination_user = C; TX.amount = 10
+* TX.origin_user = B; TX.destination_user = C; TX.amount = 10
+* TX.origin_user = B; TX.destination_user = None; TX.amount = 10
+
+Descripción técnica:
+
+Modificar los endpoints implementados en el ejercicio 1 para que guarden las transacciones realizadas en la base de datos.
+Estos endpoints son: create_funds, burn_funds y transfer_funds.
+
+Crear el modelo Transaction, que represente una transacción en la base de datos. Para los campos de esta tabla, tener en cuenta
+lo que se dijo en la descripción de alto nivel, y en el ejemplo de caso de uso.
+
+Implementar un unit tests para cada endpoint, que contemplen los casos posibles, y validen que se están guardando las transacciones correctamente.
+
+Implementar un test final, que recree el caso de uso presentado en el ejemplo, y valide los resultados esperados.
