@@ -1,118 +1,12 @@
-from rest_framework import generics, status, viewsets
-from rest_framework.views import APIView
+from rest_framework import generics, status
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied
-from django.contrib.auth import authenticate
-from django.utils import timezone
-from django.http import HttpRequest
-from django.shortcuts import get_object_or_404
-import datetime
 import decimal
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
-from .models import Account, Transaction, Loan
-from .serializers import UserSerializer, AccountSerializer, TransferLogSerializer, LoanSerializer
-from .utils import TransferUtils, TransferLogUtils, LoanUtils
-
-
-class UserCreate(generics.CreateAPIView):
-    authentication_classes = ()
-    permission_classes = ()
-
-    serializer_class = UserSerializer
-
-
-class UserDestroy(generics.DestroyAPIView):
-    serializer_class = UserSerializer
-
-
-class LoginView(APIView):
-    permission_classes = ()
-
-    def post(self, request):
-        username = request.data.get("username")
-        password = request.data.get("password")
-        user = authenticate(username=username, password=password)
-        if user:
-            return Response({"token": user.auth_token.key})
-        else:
-            return Response({"error": "Wrong Credentials"}, status=status.HTTP_400_BAD_REQUEST)
-
-
-class AccountViewSet(viewsets.ModelViewSet):
-    queryset = Account.objects.all()
-    serializer_class = AccountSerializer
-
-
-class TransferLogView(generics.ListCreateAPIView):
-    serializer_class = TransferLogSerializer
-
-    def get_queryset(self):
-        return Transaction.objects.all()
-
-    def post(self, transfer_log_data):
-        response = TransferLogUtils.exec_transaction(transfer_log_data=transfer_log_data)
-        return response
-
-
-class FundCreation(generics.UpdateAPIView):
-    serializer_class = AccountSerializer
-
-    def update(self, request):
-        user = request.user
-        if not user.is_staff:
-            raise PermissionDenied
-
-        account = Account.objects.get(user=user)
-        updated_data = {'amount': account.amount + decimal.Decimal(request.data['amount'])}
-        serializer = self.get_serializer(account, data=updated_data, partial=True)
-
-        transaction_data = {'destination_account': user.pk, 'amount': request.data['amount']}
-
-        if serializer.is_valid():
-            serializer.save()
-            TransferLogView.post(None, transaction_data)
-            return Response(serializer.data)
-        else:
-            return Response({"message": "failed", "details": serializer.errors},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-
-class FundDestruction(generics.UpdateAPIView):
-    serializer_class = AccountSerializer
-
-    def update(self, request, account_pk):
-        user = request.user
-        if not user.is_staff:
-            raise PermissionDenied
-
-        account = Account.objects.get(pk=account_pk)
-        updated_data = {'amount': account.amount - decimal.Decimal(request.data['amount'])}
-        serializer = self.get_serializer(account, data=updated_data, partial=True)
-
-        transaction_data = {'source_account': account_pk, 'amount': request.data['amount']}
-
-        if serializer.is_valid():
-            serializer.save()
-            TransferLogView.post(None, transaction_data)
-            return Response(serializer.data)
-        else:
-            return Response({"message": "failed", "details": serializer.errors},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-
-class TransferFunds(generics.UpdateAPIView):
-    serializer_class = AccountSerializer
-
-    def update(self, request, destination_account_pk):
-        user = request.user
-        source_account_pk = Account.objects.get(user=user).pk
-
-        response = TransferUtils.exec_transfer(
-            source_account_pk=source_account_pk,
-            destination_account_pk=destination_account_pk,
-            transfer_data=request.data
-        )
-        return response
+from payments.models import Loan, Account
+from payments.serializers import LoanSerializer
+from payments.utils import TransferUtils, LoanUtils
 
 
 class CreateLoan(generics.ListCreateAPIView):

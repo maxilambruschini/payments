@@ -1,8 +1,32 @@
 import decimal
 from rest_framework.response import Response
 from rest_framework import status
+from django.contrib.auth.models import User
+
 from .models import Account
 from .serializers import AccountSerializer, TransferLogSerializer
+
+
+class UserUtils:
+    @staticmethod
+    def setup_superuser(username):
+        user = User.objects.create_superuser(
+            username=username,
+            email=username + '@admin.com',
+            password='test'
+        )
+        Account.objects.create(user=user)
+        return user
+
+    @staticmethod
+    def setup_user(username):
+        user = User.objects.create_user(
+            username=username,
+            email=username + '@client.com',
+            password='test'
+        )
+        Account.objects.create(user=user)
+        return user
 
 
 class TransferLogUtils:
